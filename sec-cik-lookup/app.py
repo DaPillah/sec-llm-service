@@ -32,33 +32,43 @@ class SecEdgar():
             return None
 
         cik = result[1]
-
         link = f"https://data.sec.gov/submissions/CIK{cik}.json"
-
-
         response = requests.get(link, headers=self.headers)
- 
-
         self.submission_data = response.json()
 
         self.filings = {"form":self.submission_data["filings"]["recent"]["form"],
                         "date":self.submission_data["filings"]["recent"]["filingDate"],
-                        "accessionNumber":self.submission_data["filings"]["recent"]["accessionNumber"] 
-                        }
-        return self.filings
+                        "accessionNumber":self.submission_data["filings"]["recent"]["accessionNumber"],
+                        "primaryDocument": self.submission_data["filings"]["recent"]["primaryDocument"], 
+                        "primaryDocDescription":self.submission_data["filings"]["recent"]["primaryDocDescription"], 
+        }
+        return (self.filings, cik)
 
     def get_latest_10q(self, company):    
-        self.recent_filing(company)
+        result = self.recent_filing(company)
+        if not result:
+            return None
+
+        #unpack tuple
+        filings, cik = result
 
         #building Q-10 dictionary
         self.q10 = {}
-        for i, form in enumerate(self.filings["form"]):
+        for i, form in enumerate(filings["form"]):
             if form == "10-Q":
-                accession = self.filings["accessionNumber"][i]
+                accession = filings["accessionNumber"][i]
+                no_dash_accesssion = accession.replace("-", "")  
                 self.q10[accession] = {
-                                  "date":self.filings["date"][i],
-                                  "accessionNumber": accession
-                                 }
+                                  "date":filings["date"][i],
+                                  "accessionNumber": no_dash_accesssion,
+                                  "primaryDocument":filings["primaryDocument"][i],
+                                  "primaryDocDescription":filings["primaryDocDescription"][i],
+                                  "cik": cik
+                }
+
+        if not self.q10:
+            print(f"No 10-Q filings found for {company}")
+            return None
 
         latest_accession = max(self.q10, key=lambda x: self.q10[x]["date"])
         return self.q10[latest_accession]
