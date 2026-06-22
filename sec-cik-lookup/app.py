@@ -72,6 +72,23 @@ class SecEdgar():
 
         latest_accession = max(self.q10, key=lambda x: self.q10[x]["date"])
         return self.q10[latest_accession]
+    
+    def get_10q_doc(self, company, accession=None):
+        if accession:
+            if not hasattr(self, 'q10') or accession not in self.q10:
+                self.get_latest_10q(company) #make sure q10 is populated
+            data = self.q10[accession]
+        else:
+            data = self.get_latest_10q(company)
+
+        cik = data["cik"].lstrip("0") #remove leading 0's
+        accession_num = data["accessionNumber"]
+        doc = data["primaryDocument"]
+
+        link = f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession_num}/{doc}"
+        r = requests.get(link, headers=self.headers)
+
+        return r.text
 
         
         
@@ -87,4 +104,4 @@ class SecEdgar():
         
 
 se = SecEdgar("https://www.sec.gov/files/company_tickers.json")
-print(se.get_latest_10q("Apple Inc."))
+print(se.get_10q_doc("Apple Inc."))
