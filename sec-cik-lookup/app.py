@@ -27,22 +27,14 @@ class SecEdgar():
         result = self.name_to_cik(company)
         if not result:
             result = self.ticker_to_cik(company)
-        if not result:  # ← add this
+        if not result:  
             print(f"Company '{company}' not found")
             return None
 
         cik = result[1]
-        link = f"https://data.sec.gov/submissions/CIK{cik}.json"
-        response = requests.get(link, headers=self.headers)
-        self.submission_data = response.json()
+        filings = self._get_filings(cik)
 
-        self.filings = {"form":self.submission_data["filings"]["recent"]["form"],
-                        "date":self.submission_data["filings"]["recent"]["filingDate"],
-                        "accessionNumber":self.submission_data["filings"]["recent"]["accessionNumber"],
-                        "primaryDocument": self.submission_data["filings"]["recent"]["primaryDocument"], 
-                        "primaryDocDescription":self.submission_data["filings"]["recent"]["primaryDocDescription"], 
-        }
-        return (self.filings, cik)
+        return (filings, cik)
 
     def get_latest_10q(self, company):    
         result = self.recent_filing(company)
@@ -73,6 +65,7 @@ class SecEdgar():
         latest_accession = max(self.q10, key=lambda x: self.q10[x]["date"])
         return self.q10[latest_accession]
     
+
     def get_10q_doc(self, company, accession=None):
         if accession:
             if not hasattr(self, 'q10') or accession not in self.q10:
@@ -89,9 +82,76 @@ class SecEdgar():
         r = requests.get(link, headers=self.headers)
 
         return r.text
+    
+    def annual_filing(self, cik, year):
+        filings = self._get_filings(cik)
 
+        for i, date in enumerate(filings["date"]):
+            if filings["form"][i] == "10-K":
+                f_year = filings["date"][i].split("-")[0]
+                if str(year) == f_year:
+                    accession_num = filings["accessionNumber"][i]
+                    doc = filings["primaryDocument"][i]
+
+                    return {
+                            "date": date,
+                            "accessionNumber": accession_num.replace("-", ""),
+                            "primaryDocument": doc,
+                            "cik": cik
+                    } 
         
+        print(f"No 10-K found for year {year}")
+        return None
+            
         
+
+    def quarterly_filing(self, cik, year, quarter):
+        filings = self._get_filings(cik)
+
+        for i, date in enumerate(filings["date"]):
+            if filings["form"][i] == "10-Q":
+                f_year, f_quarter = self._get_quarter(date)
+                if (f_year, f_quarter) == (str(year), quarter):
+                    accession_num = filings["accessionNumber"][i]
+                    doc = filings["primaryDocument"][i]
+                    return {
+                            "date": date,
+                            "accessionNumber": accession_num.replace("-", ""),
+                            "primaryDocument": doc,
+                            "cik": cik
+                    }
+        
+        print(f"No 10-Q found for year {year} quarter {quarter}")
+        return None
+
+    def _get_filings(self, cik):
+        link = f"https://data.sec.gov/submissions/CIK{cik}.json"
+        response = requests.get(link, headers=self.headers)
+        data = response.json()
+        return {
+            "form": data["filings"]["recent"]["form"],
+            "date": data["filings"]["recent"]["filingDate"],
+            "accessionNumber": data["filings"]["recent"]["accessionNumber"],
+            "primaryDocument": data["filings"]["recent"]["primaryDocument"],
+            "primaryDocDescription": data["filings"]["recent"]["primaryDocDescription"]
+        }
+        
+    def _get_quarter(self, date):
+        parts = date.split("-")
+        year = parts[0]
+        month = int(parts[1])
+
+        quarters = { 
+                    1: {1, 2, 3},
+                     2: {4, 5, 6},
+                     3: {7, 8, 9},
+                     4: {10, 11, 12},
+        }
+
+        for quarter, months in quarters.items():
+            if month in months:
+                return (year, quarter)
+        return None
 
 
     def name_to_cik(self, name):
@@ -104,4 +164,16 @@ class SecEdgar():
         
 
 se = SecEdgar("https://www.sec.gov/files/company_tickers.json")
-print(se.get_10q_doc("Apple Inc."))
+
+# CIK Lookups
+se.name_to_cik("Apple Inc.")          # name → CIK
+se.ticker_to_cik("AAPL")             # ticker → CIK
+
+# Filing Retrieval
+se.recent_filing("Apple Inc.")        # all recent filings
+se.get_latest_10q("Apple Inc.")       # latest 10-Q metadata
+se.get_10q_doc("Apple Inc.")          # latest 10-Q document content
+
+# Specific Filings by Date
+se.annual_filing("0000320193", 2023)      # 10-K for specific year
+se.quarterly_filing("0000320193", 2023, 2) # 10-Q for specific year + quarter
