@@ -36,53 +36,28 @@ class SecEdgar():
 
         return (filings, cik)
 
-    def get_latest_10q(self, company):    
-        result = self.recent_filing(company)
-        if not result:
-            return None
-
-        #unpack tuple
-        filings, cik = result
-
-        #building Q-10 dictionary
-        self.q10 = {}
-        for i, form in enumerate(filings["form"]):
-            if form == "10-Q":
-                accession = filings["accessionNumber"][i]
-                no_dash_accesssion = accession.replace("-", "")  
-                self.q10[accession] = {
-                                  "date":filings["date"][i],
-                                  "accessionNumber": no_dash_accesssion,
-                                  "primaryDocument":filings["primaryDocument"][i],
-                                  "primaryDocDescription":filings["primaryDocDescription"][i],
-                                  "cik": cik
-                }
-
-        if not self.q10:
-            print(f"No 10-Q filings found for {company}")
-            return None
-
-        latest_accession = max(self.q10, key=lambda x: self.q10[x]["date"])
-        return self.q10[latest_accession]
     
 
-    def get_10q_doc(self, company, accession=None):
+    def get_doc(self, company, form_type="10-Q", accession=None): #works for any form type
         if accession:
-            if not hasattr(self, 'q10') or accession not in self.q10:
-                self.get_latest_10q(company) #make sure q10 is populated
-            data = self.q10[accession]
+            if not hasattr(self, 'filings_dict') or accession not in self.filings_dict:
+                self._get_latest_filing(company, form_type)
+            data = self.filings_dict[accession]
         else:
-            data = self.get_latest_10q(company)
+            data = self._get_latest_filing(company, form_type)
 
-        cik = data["cik"].lstrip("0") #remove leading 0's
+        if not data:
+            return None
+
+        cik = data["cik"].lstrip("0")
         accession_num = data["accessionNumber"]
         doc = data["primaryDocument"]
 
         link = f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession_num}/{doc}"
         r = requests.get(link, headers=self.headers)
-
         return r.text
     
+
     def annual_filing(self, cik, year):
         filings = self._get_filings(cik)
 
@@ -103,7 +78,6 @@ class SecEdgar():
         print(f"No 10-K found for year {year}")
         return None
             
-        
 
     def quarterly_filing(self, cik, year, quarter):
         filings = self._get_filings(cik)
@@ -124,6 +98,14 @@ class SecEdgar():
         print(f"No 10-Q found for year {year} quarter {quarter}")
         return None
 
+
+    def name_to_cik(self, name):
+        return self.namedict.get(name.lower())
+    
+    def ticker_to_cik(self, tick):
+        return self.tickerdict.get(tick.lower())
+    
+    ###Private Helpers###
     def _get_filings(self, cik):
         link = f"https://data.sec.gov/submissions/CIK{cik}.json"
         response = requests.get(link, headers=self.headers)
@@ -135,6 +117,33 @@ class SecEdgar():
             "primaryDocument": data["filings"]["recent"]["primaryDocument"],
             "primaryDocDescription": data["filings"]["recent"]["primaryDocDescription"]
         }
+    
+    def _get_latest_filing(self, company, form_type="10-Q"):
+        result = self.recent_filing(company)
+        if not result:
+            return None
+
+        filings, cik = result
+
+        self.filings_dict = {}
+        for i, form in enumerate(filings["form"]):
+            if form == form_type:  
+                accession = filings["accessionNumber"][i]
+                no_dash_accession = accession.replace("-", "")
+                self.filings_dict[accession] = {
+                    "date": filings["date"][i],
+                    "accessionNumber": no_dash_accession,
+                    "primaryDocument": filings["primaryDocument"][i],
+                    "primaryDocDescription": filings["primaryDocDescription"][i],
+                    "cik": cik
+                }
+
+        if not self.filings_dict:
+            print(f"No {form_type} filings found for {company}")
+            return None
+
+        latest_accession = max(self.filings_dict, key=lambda x: self.filings_dict[x]["date"]) #gets latest file
+        return self.filings_dict[latest_accession]
         
     def _get_quarter(self, date):
         parts = date.split("-")
@@ -142,7 +151,7 @@ class SecEdgar():
         month = int(parts[1])
 
         quarters = { 
-                    1: {1, 2, 3},
+                     1: {1, 2, 3},
                      2: {4, 5, 6},
                      3: {7, 8, 9},
                      4: {10, 11, 12},
@@ -154,26 +163,20 @@ class SecEdgar():
         return None
 
 
-    def name_to_cik(self, name):
-        return self.namedict.get(name.lower())
     
-    def ticker_to_cik(self, tick):
-        return self.tickerdict.get(tick.lower())
 
         
         
 
 se = SecEdgar("https://www.sec.gov/files/company_tickers.json")
 
-# CIK Lookups
-se.name_to_cik("Apple Inc.")          # name → CIK
-se.ticker_to_cik("AAPL")             # ticker → CIK
+print(se.annual_filing("0000320193", 2025))
+print(se.quarterly_filing("0000320193", 2025, 2))
 
-# Filing Retrieval
-se.recent_filing("Apple Inc.")        # all recent filings
-se.get_latest_10q("Apple Inc.")       # latest 10-Q metadata
-se.get_10q_doc("Apple Inc.")          # latest 10-Q document content
+print(se._get_latest_filing("Apple Inc."))
+print(se._get_latest_filing("Apple Inc.", form_type="10-Q"))
+print(se._get_latest_filing("Apple Inc.", form_type="10-K"))
 
-# Specific Filings by Date
-se.annual_filing("0000320193", 2023)      # 10-K for specific year
-se.quarterly_filing("0000320193", 2023, 2) # 10-Q for specific year + quarter
+doc_10k = se.get_doc("Apple Inc.", form_type="10-K")
+print(doc_10k[:500])
+
