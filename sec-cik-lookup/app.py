@@ -1,4 +1,5 @@
 import requests
+from bs4 import BeautifulSoup
 
 class SecEdgar():
     def __init__(self, file):
@@ -55,7 +56,8 @@ class SecEdgar():
 
         link = f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession_num}/{doc}"
         r = requests.get(link, headers=self.headers)
-        return r.text
+        soup = BeautifulSoup(r.text, "html.parser")
+        return soup.get_text(separator='\n', strip=True) #removes useless HTML formatting
     
 
     def annual_filing(self, cik, year):
@@ -169,14 +171,13 @@ class SecEdgar():
         
 
 se = SecEdgar("https://www.sec.gov/files/company_tickers.json")
-
+'''
 print(se.annual_filing("0000320193", 2025))
 print(se.quarterly_filing("0000320193", 2025, 2))
 
 print(se._get_latest_filing("Apple Inc."))
 print(se._get_latest_filing("Apple Inc.", form_type="10-Q"))
 print(se._get_latest_filing("Apple Inc.", form_type="10-K"))
-
-doc_10k = se.get_doc("Apple Inc.", form_type="10-K")
-print(doc_10k[:500])
-
+'''
+doc_10k = se.get_doc("Apple Inc.", form_type="10-Q")
+print(doc_10k)
