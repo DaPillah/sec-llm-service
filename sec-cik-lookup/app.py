@@ -24,7 +24,7 @@ class SecEdgar():
             self.tickerdict[ticker.lower()] = (name, cik, ticker)
         
     def recent_filing(self, company):
-        #searching through either name or tik
+        '''searching through either name or tik'''
         result = self.name_to_cik(company)
         if not result:
             result = self.ticker_to_cik(company)
@@ -61,6 +61,9 @@ class SecEdgar():
     
 
     def annual_filing(self, cik, year):
+        ''' NOTE: year filtering uses filing date year, not fiscal year
+                  Future improvement: detect fiscal year end and adjust year matching accordingly for companies with 
+                  non-standard fiscal years (e.g. Apple's fiscal year ends in September)'''
         filings = self._get_filings(cik)
 
         for i, date in enumerate(filings["date"]):
@@ -83,10 +86,12 @@ class SecEdgar():
 
     def quarterly_filing(self, cik, year, quarter):
         filings = self._get_filings(cik)
+        fiscal_year_end = filings["fiscalYearEnd"]
+        fiscal_month = int(str(fiscal_year_end)[:2])  # get company's filing ending month
 
         for i, date in enumerate(filings["date"]):
             if filings["form"][i] == "10-Q":
-                f_year, f_quarter = self._get_quarter(date)
+                f_year, f_quarter = self._get_quarter(date, fiscal_month) # convert to year/quarter system
                 if (f_year, f_quarter) == (str(year), quarter):
                     accession_num = filings["accessionNumber"][i]
                     doc = filings["primaryDocument"][i]
@@ -100,6 +105,13 @@ class SecEdgar():
         print(f"No 10-Q found for year {year} quarter {quarter}")
         return None
 
+    def get_fiscal_year_end(self, cik):
+        """Returns the month and day a company's fiscal year ends"""
+        filings = self._get_filings(cik)
+        fiscal_year_end = filings["fiscalYearEnd"]
+        month = int(str(fiscal_year_end)[:2])
+        day = int(str(fiscal_year_end)[2:])
+        return month, day
 
     def name_to_cik(self, name):
         return self.namedict.get(name.lower())
@@ -117,7 +129,8 @@ class SecEdgar():
             "date": data["filings"]["recent"]["filingDate"],
             "accessionNumber": data["filings"]["recent"]["accessionNumber"],
             "primaryDocument": data["filings"]["recent"]["primaryDocument"],
-            "primaryDocDescription": data["filings"]["recent"]["primaryDocDescription"]
+            "primaryDocDescription": data["filings"]["recent"]["primaryDocDescription"],
+            "fiscalYearEnd": data.get("fiscalYearEnd", "1231"),
         }
     
     def _get_latest_filing(self, company, form_type="10-Q"):
@@ -146,18 +159,25 @@ class SecEdgar():
 
         latest_accession = max(self.filings_dict, key=lambda x: self.filings_dict[x]["date"]) #gets latest file
         return self.filings_dict[latest_accession]
-        
-    def _get_quarter(self, date):
+
+
+    def _get_quarter(self, date, fiscal_month):
+        #converts the given filing date to company's year/quarter system
         parts = date.split("-")
         year = parts[0]
         month = int(parts[1])
 
-        quarters = { 
-                     1: {1, 2, 3},
-                     2: {4, 5, 6},
-                     3: {7, 8, 9},
-                     4: {10, 11, 12},
-        }
+        # calculate which month the fiscal year starts
+        fiscal_start = (fiscal_month % 12) + 1
+
+        # dynamically build quarters based on fiscal year start
+        quarters = {}
+        for q in range(1, 5):
+            months = set()
+            for m in range(3):
+                month_num = ((fiscal_start - 1 + (q-1)*3 + m) % 12) + 1
+                months.add(month_num)
+            quarters[q] = months
 
         for quarter, months in quarters.items():
             if month in months:
