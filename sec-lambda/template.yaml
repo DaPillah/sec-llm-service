@@ -37,6 +37,11 @@ Resources:
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref EdgarBucket
+        - Statement:  
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: "*"
 
   EdgarBucket:
     Type: AWS::S3::Bucket

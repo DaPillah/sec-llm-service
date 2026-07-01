@@ -57,7 +57,7 @@ class SecEdgar():
             return None
 
         cik = data["cik"].lstrip("0")
-        accession_num = data["accessionNumber"]
+        accession_num = data["accessionNumber"].replace("-", "")
         doc = data["primaryDocument"]
 
         link = f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession_num}/{doc}"
@@ -81,7 +81,7 @@ class SecEdgar():
 
                     return {
                             "date": date,
-                            "accessionNumber": accession_num.replace("-", ""),
+                            "accessionNumber": accession_num.replace,
                             "primaryDocument": doc,
                             "cik": cik
                     } 
@@ -103,7 +103,7 @@ class SecEdgar():
                     doc = filings["primaryDocument"][i]
                     return {
                             "date": date,
-                            "accessionNumber": accession_num.replace("-", ""),
+                            "accessionNumber": accession_num,
                             "primaryDocument": doc,
                             "cik": cik
                     }
