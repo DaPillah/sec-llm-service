@@ -1,9 +1,20 @@
 import boto3
 import json
+import sys
+import requests
+
+
+from sec_edgar import SecEdgar
 
 MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+QUESTION = "What was Apple's total net sales for Q2 2026 (quarter ended March 29, 2026)?"
 
-def ask_claude(question):
+def get_filing_text():
+    se = SecEdgar("https://www.sec.gov/files/company_tickers.json")
+    return se.get_doc("Apple Inc.")
+
+def ask_claude_with_context(question, filing_text):
+    
     bedrock = boto3.client(
         "bedrock-runtime",
         region_name="us-east-2"
@@ -17,7 +28,7 @@ def ask_claude(question):
             "messages": [
                 {
                     "role": "user",
-                    "content": question
+                    "content": f"""Using the information below, answer the following question. Question: {question} Document:{filing_text}"""
                 }
             ]
         })
@@ -25,18 +36,10 @@ def ask_claude(question):
     
     response_body = json.loads(response["body"].read())
     answer = response_body["content"][0]["text"]
-    print(answer)
+    return answer
 
-ask_claude("What was Apple's total net sales for Q2 2026?")
 
-'''
-question: "What was Apple's total net sales for Q2 2026 (quarter ended March 29, 2026)?"
 
-claude_response: """I don't have access to information about Apple's Q2 2026 
-                    financial results. Since we're currently in 2024, Q2 2026 hasn't occurred yet..."""
-
-actual answer from SEC filing: "$111.2 billion"  # from the real 10-Q we pulled earlier
-------
-Gap: Claude completely unaware this filing exists!!
-
-'''
+filing_text = get_filing_text()
+response = ask_claude_with_context(QUESTION, filing_text)
+print(response)
