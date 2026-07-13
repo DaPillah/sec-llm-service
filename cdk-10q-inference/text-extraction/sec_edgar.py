@@ -1,5 +1,4 @@
 import requests
-from bs4 import BeautifulSoup
 
 class SecEdgar():
     def __init__(self, file):
@@ -56,8 +55,7 @@ class SecEdgar():
 
         link = f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession_num}/{doc}"
         r = requests.get(link, headers=self.headers)
-        soup = BeautifulSoup(r.text, "html.parser")
-        return soup.get_text(separator='\n', strip=True) #removes useless HTML formatting
+        return r.text
     
 
     def annual_filing(self, cik, year):
