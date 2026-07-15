@@ -1,4 +1,5 @@
 import requests
+from datetime import datetime, timedelta
 
 class SecEdgar():
     def __init__(self, file):
@@ -73,7 +74,7 @@ class SecEdgar():
 
                     return {
                             "date": date,
-                            "accessionNumber": accession_num.replace("-", ""),
+                            "accessionNumber": accession_num,
                             "primaryDocument": doc,
                             "cik": cik
                     } 
@@ -95,7 +96,7 @@ class SecEdgar():
                     doc = filings["primaryDocument"][i]
                     return {
                             "date": date,
-                            "accessionNumber": accession_num.replace("-", ""),
+                            "accessionNumber": accession_num,
                             "primaryDocument": doc,
                             "cik": cik
                     }
@@ -159,16 +160,24 @@ class SecEdgar():
         return self.filings_dict[latest_accession]
 
 
-    def _get_quarter(self, date, fiscal_month):
-        #converts the given filing date to company's year/quarter system
-        parts = date.split("-")
-        year = parts[0]
-        month = int(parts[1])
 
-        # calculate which month the fiscal year starts
+
+    def _get_quarter(self, date, fiscal_month):
+        parsed_date = datetime.strptime(date, "%Y-%m-%d")
+        adjusted_date = parsed_date - timedelta(days=45)
+
+        calendar_year = adjusted_date.year
+        month = adjusted_date.month
+
         fiscal_start = (fiscal_month % 12) + 1
 
-        # dynamically build quarters based on fiscal year start
+        # if the adjusted date falls on/after the fiscal year's start month,
+        # it belongs to the NEXT calendar year's fiscal year label
+        if fiscal_start > 1 and month >= fiscal_start:
+            fiscal_year = calendar_year + 1
+        else:
+            fiscal_year = calendar_year
+
         quarters = {}
         for q in range(1, 5):
             months = set()
@@ -179,6 +188,6 @@ class SecEdgar():
 
         for quarter, months in quarters.items():
             if month in months:
-                return (year, quarter)
+                return (str(fiscal_year), quarter)
         return None
 
