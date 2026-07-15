@@ -73,7 +73,7 @@ class SecEdgar():
 
                     return {
                             "date": date,
-                            "accessionNumber": accession_num.replace,
+                            "accessionNumber": accession_num.replace("-", ""),
                             "primaryDocument": doc,
                             "cik": cik
                     } 
@@ -95,7 +95,7 @@ class SecEdgar():
                     doc = filings["primaryDocument"][i]
                     return {
                             "date": date,
-                            "accessionNumber": accession_num.replace,
+                            "accessionNumber": accession_num.replace("-", ""),
                             "primaryDocument": doc,
                             "cik": cik
                     }
