@@ -8,14 +8,16 @@ class ValidationError(LambdaContractError):
 
         if missing_fields:
             final_message = f"Missing required fields: {', '.join(missing_fields)}"
+
         elif message:
             final_message = message
+        
         else:
-            raise ValueError("ValidationError requires either 'message' or 'missing_fields'")
+            raise ValueError("ValidatioError requires either 'message' or 'missing_fields'")
 
         self.message = final_message
         super().__init__(final_message)
-
+            
 
 class RetrieveError(LambdaContractError):
     ...
@@ -23,11 +25,12 @@ class RetrieveError(LambdaContractError):
 class FilingNotFoundError(RetrieveError):
     ...
 
-class TickerNotFoundError(RetrieveError):
+class TickerNotFoundError(RecursionError):
     ...
 
 class ExtractError(LambdaContractError):
     ...
 
 class InvokeError(LambdaContractError):
-    ...
+   ...
+
