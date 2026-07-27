@@ -122,16 +122,24 @@ Filing ({ticker} {period} {year}):
     }
 
 def lambda_handler(event, context):
+    logger.info(f"Received event: {event}")
     try:
         validate_request(event)
+        logger.info("Validation passed")
 
         html = retrieve_filing(event["ticker"], event["year"], event["period"])
+        logger.info(f"Retrieved filing HTML, length={len(html)}")
+
         text = extract_filing(html)
+        logger.info(f"Extracted text, length={len(text)}")
+
         result = invoke_model(event["question"], event["ticker"], event["period"], event["year"], text)
+        logger.info(f"Model invocation complete, latency_ms={result['meta']['latency_ms']}")
 
         return result
 
     except LambdaContractError as e:
+        logger.warning(f"{e.__class__.__name__}: {e}")
         return {
             "error": e.__class__.__name__,
             "message": str(e)
