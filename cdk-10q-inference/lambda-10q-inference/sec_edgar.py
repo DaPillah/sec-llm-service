@@ -206,12 +206,17 @@ class SecEdgar():
             next_fiscal_year = next(
                 (fy for report, fy in ten_k_years if report > report_date), None
             )
-            fiscal_year = next_fiscal_year or self._estimate_fiscal_year(report_date, fiscal_month)
+
+            if next_fiscal_year is not None: #found 10-Q file corresponding to a 10K report
+                fiscal_year = next_fiscal_year
+            else:
+                fiscal_year = self._estimate_fiscal_year(report_date, fiscal_month)
+
             groups.setdefault(fiscal_year, []).append((report_date, accession_num))
 
-        quarter_map = {}
+        quarter_map = {} #key: 
         for fiscal_year, entries in groups.items():
-            for position, (_, accession_num) in enumerate(sorted(entries), start=1):
+            for position, (_, accession_num) in enumerate(sorted(entries), start=1): #sort and start at Q1
                 quarter_map[accession_num] = (fiscal_year, position)
         return quarter_map
 
@@ -222,6 +227,6 @@ class SecEdgar():
         fiscal_start = (fiscal_month % 12) + 1
 
         if fiscal_start > 1 and parsed_date.month >= fiscal_start:
-            return str(parsed_date.year + 1)
+            return str(parsed_date.year + 1) #adjust 10-Q file so that it will match correct fiscal year
         return str(parsed_date.year)
 
