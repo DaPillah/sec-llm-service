@@ -1,5 +1,10 @@
 import requests
+from datetime import datetime
 
+# This project only covers standard 10-K/10-Q filers. Companies that change
+# their fiscal year end file a 10-KT (transition-period annual report)
+# instead of a 10-K around the change -- that's out of scope here, so a
+# 10-KT is simply not recognized as an annual report at all.
 class SecEdgar():
     def __init__(self, file):
         self.namedict = {}
@@ -59,47 +64,57 @@ class SecEdgar():
     
 
     def annual_filing(self, cik, year):
-        ''' NOTE: year filtering uses filing date year, not fiscal year
-                  Future improvement: detect fiscal year end and adjust year matching accordingly for companies with 
-                  non-standard fiscal years (e.g. Apple's fiscal year ends in September)'''
+        # reportDate is the fiscal-period-end date itself, so its calendar
+        # year is the fiscal year label directly.
+        #
+        # Known limitation: a company whose fiscal year is a genuine
+        # 52/53-week calendar anchored right at the Dec31/Jan1 boundary
+        # (e.g. Johnson & Johnson, CIK 0000200406) can have its fiscal
+        # year end land in early January some years instead of late
+        # December, which this simple year-of-reportDate rule mislabels by
+        # one year. This is accepted rather than fixed: correctly
+        # resolving it requires fetching each such filing's own
+        # authoritative fiscal-year label from SEC (no way to tell, from
+        # fiscalYearEnd alone, whether a given January-ending filer needs
+        # the adjustment -- NVIDIA and Walmart also end in January but
+        # never need it), which was judged not worth the added complexity
+        # for how rare this pattern is.
         filings = self._get_filings(cik)
 
         for i, date in enumerate(filings["date"]):
             if filings["form"][i] == "10-K":
-                f_year = filings["date"][i].split("-")[0]
-                if str(year) == f_year:
+                report_date = filings["reportDate"][i]
+                if report_date and report_date.split("-")[0] == str(year):
                     accession_num = filings["accessionNumber"][i]
                     doc = filings["primaryDocument"][i]
 
                     return {
                             "date": date,
-                            "accessionNumber": accession_num.replace,
-                            "primaryDocument": doc,
-                            "cik": cik
-                    } 
-        
-        print(f"No 10-K found for year {year}")
-        return None
-            
-
-    def quarterly_filing(self, cik, year, quarter):
-        filings = self._get_filings(cik)
-        fiscal_year_end = filings["fiscalYearEnd"]
-        fiscal_month = int(str(fiscal_year_end)[:2])  # get company's filing ending month
-
-        for i, date in enumerate(filings["date"]):
-            if filings["form"][i] == "10-Q":
-                f_year, f_quarter = self._get_quarter(date, fiscal_month) # convert to year/quarter system
-                if (f_year, f_quarter) == (str(year), quarter):
-                    accession_num = filings["accessionNumber"][i]
-                    doc = filings["primaryDocument"][i]
-                    return {
-                            "date": date,
-                            "accessionNumber": accession_num.replace,
+                            "accessionNumber": accession_num,
                             "primaryDocument": doc,
                             "cik": cik
                     }
-        
+
+        print(f"No 10-K found for year {year}")
+        return None
+
+
+    def quarterly_filing(self, cik, year, quarter):
+        filings = self._get_filings(cik)
+        quarter_map = self._get_quarters(filings)
+
+        for i, date in enumerate(filings["date"]):
+            if filings["form"][i] == "10-Q":
+                accession_num = filings["accessionNumber"][i]
+                if quarter_map.get(accession_num) == (str(year), quarter):
+                    doc = filings["primaryDocument"][i]
+                    return {
+                            "date": date,
+                            "accessionNumber": accession_num,
+                            "primaryDocument": doc,
+                            "cik": cik
+                    }
+
         print(f"No 10-Q found for year {year} quarter {quarter}")
         return None
 
@@ -125,6 +140,7 @@ class SecEdgar():
         return {
             "form": data["filings"]["recent"]["form"],
             "date": data["filings"]["recent"]["filingDate"],
+            "reportDate": data["filings"]["recent"]["reportDate"],
             "accessionNumber": data["filings"]["recent"]["accessionNumber"],
             "primaryDocument": data["filings"]["recent"]["primaryDocument"],
             "primaryDocDescription": data["filings"]["recent"]["primaryDocDescription"],
@@ -159,26 +175,58 @@ class SecEdgar():
         return self.filings_dict[latest_accession]
 
 
-    def _get_quarter(self, date, fiscal_month):
-        #converts the given filing date to company's year/quarter system
-        parts = date.split("-")
-        year = parts[0]
-        month = int(parts[1])
 
-        # calculate which month the fiscal year starts
+
+    def _get_quarters(self, filings):
+        """Maps each 10-Q accession number to (fiscal_year, quarter).
+
+        Quarter number is assigned by position (1st/2nd/3rd 10-Q filed since
+        the prior 10-K) rather than bucketing reportDate by calendar month.
+        Month-bucketing breaks for filers on a 4-4-5-week fiscal calendar
+        (e.g. Apple, NVIDIA), whose quarter-end date occasionally spills a
+        day into the "wrong" calendar month relative to fiscal_month.
+        """
+        fiscal_month = int(str(filings["fiscalYearEnd"])[:2])
+
+        ten_qs = []
+        ten_k_years = []
+        for i in range(len(filings["form"])):
+            report_date = filings["reportDate"][i]
+            if not report_date:
+                continue
+            if filings["form"][i] == "10-Q":
+                ten_qs.append((report_date, filings["accessionNumber"][i]))
+            elif filings["form"][i] == "10-K":
+                ten_k_years.append((report_date, report_date.split("-")[0]))
+        ten_k_years.sort(key=lambda entry: entry[0])
+
+        groups = {}
+        for report_date, accession_num in ten_qs:
+            # a 10-Q belongs to the fiscal year of the next 10-K filed after it
+            next_fiscal_year = next(
+                (fy for report, fy in ten_k_years if report > report_date), None
+            )
+
+            if next_fiscal_year is not None: #found 10-Q file corresponding to a 10K report
+                fiscal_year = next_fiscal_year
+            else:
+                fiscal_year = self._estimate_fiscal_year(report_date, fiscal_month)
+
+            groups.setdefault(fiscal_year, []).append((report_date, accession_num))
+
+        quarter_map = {} #key: 
+        for fiscal_year, entries in groups.items():
+            for position, (_, accession_num) in enumerate(sorted(entries), start=1): #sort and start at Q1
+                quarter_map[accession_num] = (fiscal_year, position)
+        return quarter_map
+
+    def _estimate_fiscal_year(self, report_date, fiscal_month):
+        """Calendar-month fallback for a 10-Q in the current, still-open
+        fiscal year, where no later 10-K exists yet to anchor against."""
+        parsed_date = datetime.strptime(report_date, "%Y-%m-%d")
         fiscal_start = (fiscal_month % 12) + 1
 
-        # dynamically build quarters based on fiscal year start
-        quarters = {}
-        for q in range(1, 5):
-            months = set()
-            for m in range(3):
-                month_num = ((fiscal_start - 1 + (q-1)*3 + m) % 12) + 1
-                months.add(month_num)
-            quarters[q] = months
-
-        for quarter, months in quarters.items():
-            if month in months:
-                return (year, quarter)
-        return None
+        if fiscal_start > 1 and parsed_date.month >= fiscal_start:
+            return str(parsed_date.year + 1) #adjust 10-Q file so that it will match correct fiscal year
+        return str(parsed_date.year)
 
