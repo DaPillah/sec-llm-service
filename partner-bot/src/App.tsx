@@ -1,120 +1,127 @@
 import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { SelectField, TextField, Button, View } from '@aws-amplify/ui-react'
 import './App.css'
 
+const COMPANIES: Record<string, string> = {
+  Apple: "AAPL",
+  Amazon: "AMZN",
+  Microsoft: "MSFT",
+}
+const currentYear = new Date().getFullYear()
+const years = Array.from({ length: 5 }, (_, i) => currentYear - i)
+  
+
+type RequestBody = {
+  question: string
+  ticker: string
+  year: number
+  period: string
+}
+
+type ResponseBody = {
+  answer: string
+  meta: object
+}
+
+
+async function submitQuery(body: RequestBody): Promise<ResponseBody> {
+  console.log("Request:", JSON.stringify(body, null, 2))
+  await new Promise((r) => setTimeout(r, 800))
+  return { answer: "Stub response — replace with real Lambda call.", meta: {} }
+}
+
 function App() {
-  const [count, setCount] = useState(0)
+  const [question, setQuestion] = useState("")
+  const [company, setCompany] = useState("")
+  const [year, setYear] = useState("")
+  const [period, setPeriod] = useState("")
+
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [answer, setAnswer] = useState<string | null>(null)
+
+  async function handleSubmit() {
+    setLoading(true)
+    setError(null)
+    setAnswer(null)
+
+    const body: RequestBody = {
+      question: question,
+      ticker: COMPANIES[company],
+      year: Number(year),
+      period: period,
+    }
+
+    try {
+      const result = await submitQuery(body)
+      setAnswer(result.answer)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+      <TextField
+        descriptiveText="Ask your question"
+        placeholder="What was the earnings?"
+        label="question"
+        value={question}
+        onChange={(e) => setQuestion(e.target.value)}
+      />
 
-      <div className="ticks"></div>
+      <SelectField
+        label="company"
+        value={company}
+        onChange={(e) => setCompany(e.target.value)}
+        descriptiveText="What company are you searching for?"
+      >
+        {Object.keys(COMPANIES).map((name) => (
+          <option key={name} value={name}>{name}</option>
+        ))}
+      </SelectField>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      <SelectField
+        label="year"
+        value={year}
+        onChange={(e) => setYear(e.target.value)}
+        descriptiveText="Which fiscal year?"
+      >
+        {years.map((y) => (
+          <option key={y} value={y}>{y}</option>
+        ))}
+      </SelectField>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
+      <SelectField
+        label="period"
+        value={period}
+        descriptiveText="What period?"
+        onChange={(e) => setPeriod(e.target.value)}
+      >
+        <option value="Q1">Q1</option>
+        <option value="Q2">Q2</option>
+        <option value="Q3">Q3</option>
+        <option value="Q4">Q4</option>
+        <option value="FY">FY</option>
+      </SelectField>
+
+      <Button onClick={handleSubmit} isLoading={loading} loadingText="Thinking...">
+        Submit
+      </Button>
+
+      {error && (
+        <View backgroundColor="red.10" padding="1rem" marginTop="1rem">
+          {error}
+        </View>
+      )}
+
+      {answer && (
+        <View backgroundColor="neutral.10" padding="1rem" marginTop="1rem">
+          {answer}
+        </View>
+      )}
     </>
   )
 }
