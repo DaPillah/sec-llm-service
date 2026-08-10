@@ -11,6 +11,7 @@ import time
 import boto3
 from botocore.exceptions import ClientError
 import logging
+import json
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -121,37 +122,60 @@ Filing ({ticker} {period} {year}):
         }
     }
 
-def lambda_handler(event, context):
-    logger.info(f"Received event: {event}")
+
+def process_request(payload):
+
+    logger.info(f"Received payload: {payload}")
+
+    validate_request(payload)
+    logger.info("Validation passed")
+
+    html = retrieve_filing(payload["ticker"], payload["year"], payload["period"])
+    logger.info(f"Retrieved filing HTML, length={len(html)}")
+
+    text = extract_filing(html)
+    logger.info(f"Extracted text, length={len(text)}")
+
+    result = invoke_model(payload["question"], payload["ticker"], payload["period"], payload["year"], text)
+    logger.info(f"Model invocation complete, latency_ms={result['meta']['latency_ms']}")
+
+    return result
+
+def _response(status_code, payload):
+    return {
+        "statusCode": status_code,
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps(payload),
+    }
+
+def http_handler(event, context):
+    logger.info(f"Received request: {event.get('rawPath')} {event.get('requestContext', {}).get('http', {}).get('method')}")
+
     try:
-        validate_request(event)
-        logger.info("Validation passed")
+        body = json.loads(event["body"])
+    except (KeyError, TypeError, json.JSONDecodeError) as e:
+        logger.warning(f"400 BadRequest: could not parse body ({e})")
+        return _response(400, {"error": "BadRequest", "message": "Request body must be valid JSON"})
 
-        html = retrieve_filing(event["ticker"], event["year"], event["period"])
-        logger.info(f"Retrieved filing HTML, length={len(html)}")
+    try:
+        result = process_request(body)
+        logger.info("200 OK")
+        return _response(200, result)
 
-        text = extract_filing(html)
-        logger.info(f"Extracted text, length={len(text)}")
+    except ValidationError as e:
+        logger.warning(f"400 {e.__class__.__name__}: {e}")
+        return _response(400, {"error": e.__class__.__name__, "message": str(e)})
 
-        result = invoke_model(event["question"], event["ticker"], event["period"], event["year"], text)
-        logger.info(f"Model invocation complete, latency_ms={result['meta']['latency_ms']}")
-
-        return result
+    except (TickerNotFoundError, FilingNotFoundError) as e:
+        logger.warning(f"404 {e.__class__.__name__}: {e}")
+        return _response(404, {"error": e.__class__.__name__, "message": str(e)})
 
     except LambdaContractError as e:
-        logger.warning(f"{e.__class__.__name__}: {e}")
-        return {
-            "error": e.__class__.__name__,
-            "message": str(e)
-        }
-    
+        logger.error(f"500 {e.__class__.__name__}: {e}")
+        return _response(500, {"error": e.__class__.__name__, "message": str(e)})
+
     except Exception as e:
-        logger.error(f"Unexpected error: {e}", exc_info=True)
-        return {
-            "error": "InternalError",
-            "message": "An unexpected error occurred while processing the request."
-        }
-    
-    
+        logger.error(f"500 InternalError: {e}", exc_info=True)
+        return _response(500, {"error": "InternalError", "message": "An unexpected error occurred"})
     
     
