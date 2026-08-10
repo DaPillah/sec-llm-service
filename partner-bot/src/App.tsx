@@ -25,9 +25,18 @@ type ResponseBody = {
 
 
 async function submitQuery(body: RequestBody): Promise<ResponseBody> {
-  console.log("Request:", JSON.stringify(body, null, 2))
-  await new Promise((r) => setTimeout(r, 800))
-  return { answer: "Stub response — replace with real Lambda call.", meta: {} }
+  const response = await fetch(import.meta.env.VITE_INFERENCE_API, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+
+  if (!response.ok) {
+    const errorBody = await response.json()
+    throw new Error(errorBody.message ?? `Request failed with status ${response.status}`)
+  }
+
+  return response.json()
 }
 
 function App() {
@@ -41,6 +50,11 @@ function App() {
   const [answer, setAnswer] = useState<string | null>(null)
 
   async function handleSubmit() {
+    if (!question || !company || !year || !period) {
+      setError("Please fill in all fields before submitting.")
+      return
+    }
+
     setLoading(true)
     setError(null)
     setAnswer(null)
@@ -74,6 +88,7 @@ function App() {
 
       <SelectField
         label="company"
+        placeholder="Select a company"
         value={company}
         onChange={(e) => setCompany(e.target.value)}
         descriptiveText="What company are you searching for?"
@@ -85,6 +100,7 @@ function App() {
 
       <SelectField
         label="year"
+        placeholder="Select a year"
         value={year}
         onChange={(e) => setYear(e.target.value)}
         descriptiveText="Which fiscal year?"
@@ -96,6 +112,7 @@ function App() {
 
       <SelectField
         label="period"
+        placeholder="Select a period"
         value={period}
         descriptiveText="What period?"
         onChange={(e) => setPeriod(e.target.value)}

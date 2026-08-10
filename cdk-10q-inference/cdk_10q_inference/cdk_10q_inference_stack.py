@@ -17,7 +17,7 @@ class Cdk10QInferenceStack(Stack):
             self, "TenQInferenceFunction",
             entry="lambda-10q-inference",
             index="handler.py",
-            handler="lambda_handler",
+            handler="http_handler",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(60),
         )
