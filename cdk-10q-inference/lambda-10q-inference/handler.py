@@ -141,41 +141,18 @@ def process_request(payload):
 
     return result
 
-def _response(status_code, payload):
-    return {
-        "statusCode": status_code,
-        "headers": {"Content-Type": "application/json"},
-        "body": json.dumps(payload),
-    }
 
-def http_handler(event, context):
-    logger.info(f"Received request: {event.get('rawPath')} {event.get('requestContext', {}).get('http', {}).get('method')}")
-
+def core_handler(event, context):
     try:
-        body = json.loads(event["body"])
-    except (KeyError, TypeError, json.JSONDecodeError) as e:
-        logger.warning(f"400 BadRequest: could not parse body ({e})")
-        return _response(400, {"error": "BadRequest", "message": "Request body must be valid JSON"})
-
-    try:
-        result = process_request(body)
-        logger.info("200 OK")
-        return _response(200, result)
-
+        result = process_request(event)
+        logger.info("Request completed successfully")
+        return {"ok": True, "data": result}
     except ValidationError as e:
         logger.warning(f"400 {e.__class__.__name__}: {e}")
-        return _response(400, {"error": e.__class__.__name__, "message": str(e)})
-
+        return {"ok": False, "error": e.__class__.__name__, "message": str(e), "status": 400}
     except (TickerNotFoundError, FilingNotFoundError) as e:
         logger.warning(f"404 {e.__class__.__name__}: {e}")
-        return _response(404, {"error": e.__class__.__name__, "message": str(e)})
-
+        return {"ok": False, "error": e.__class__.__name__, "message": str(e), "status": 404}
     except LambdaContractError as e:
         logger.error(f"500 {e.__class__.__name__}: {e}")
-        return _response(500, {"error": e.__class__.__name__, "message": str(e)})
-
-    except Exception as e:
-        logger.error(f"500 InternalError: {e}", exc_info=True)
-        return _response(500, {"error": "InternalError", "message": "An unexpected error occurred"})
-    
-    
+        return {"ok": False, "error": e.__class__.__name__, "message": str(e), "status": 500}

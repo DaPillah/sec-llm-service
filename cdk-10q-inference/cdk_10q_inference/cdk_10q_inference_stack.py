@@ -17,7 +17,7 @@ class Cdk10QInferenceStack(Stack):
             self, "TenQInferenceFunction",
             entry="lambda-10q-inference",
             index="handler.py",
-            handler="http_handler",
+            handler="core_handler",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(60),
         )
@@ -28,3 +28,15 @@ class Cdk10QInferenceStack(Stack):
                 resources=["*"],
             )
         )
+
+        edge_lambda = PythonFunction(
+            self, "EdgeFunction",
+            entry="lambda-edge",
+            index="handler.py",
+            handler="edge_handler",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            timeout=Duration.seconds(29),
+            environment={"CORE_FUNCTION_NAME": inference_lambda.function_name},
+        )
+
+        inference_lambda.grant_invoke(edge_lambda)
