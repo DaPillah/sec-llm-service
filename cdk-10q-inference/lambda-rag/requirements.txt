@@ -1,0 +1,5 @@
+requests
+langchain-text-splitters
+langchain-aws
+langchain-community
+faiss-cpu

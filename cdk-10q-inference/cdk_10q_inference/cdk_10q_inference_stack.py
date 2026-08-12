@@ -6,6 +6,7 @@ from aws_cdk import (
 )
 from aws_cdk.aws_lambda_python_alpha import PythonFunction
 from constructs import Construct
+from aws_cdk import aws_ecr_assets as ecr_assets 
 
 
 class Cdk10QInferenceStack(Stack):
@@ -13,6 +14,7 @@ class Cdk10QInferenceStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
+        # --- Core Lambda: the four-step inference pipeline ---
         inference_lambda = PythonFunction(
             self, "TenQInferenceFunction",
             entry="lambda-10q-inference",
@@ -29,6 +31,7 @@ class Cdk10QInferenceStack(Stack):
             )
         )
 
+        # --- Edge Lambda: identity, validation, HTTP translation ---
         edge_lambda = PythonFunction(
             self, "EdgeFunction",
             entry="lambda-edge",
@@ -40,3 +43,29 @@ class Cdk10QInferenceStack(Stack):
         )
 
         inference_lambda.grant_invoke(edge_lambda)
+        
+        
+
+        rag_lambda = _lambda.DockerImageFunction(
+            self, "RagInferenceFunction",
+            code=_lambda.DockerImageCode.from_image_asset(
+                "lambda-rag",
+                platform=ecr_assets.Platform.LINUX_AMD64,
+            ),
+            architecture=_lambda.Architecture.X86_64,
+            timeout=Duration.seconds(120),
+            memory_size=512,
+            environment={
+                "MODEL_ID": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+                "EMBEDDING_MODEL_ID": "amazon.titan-embed-text-v2:0",
+            },
+        )
+
+        rag_lambda.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["bedrock:InvokeModel"],
+                resources=["*"],
+            )
+        )
+        
+        
