@@ -73,9 +73,18 @@ const COMPANIES: Record<string, string> = {
   Apple: "AAPL",
   Amazon: "AMZN",
   Microsoft: "MSFT",
+  Google: "GOOGL",
+  Meta: "META",
+  Nvidia: "NVDA",
+  Tesla: "TSLA",
+  Netflix: "NFLX",
+  "Berkshire Hathaway": "BRK.B",
+  JPMorgan: "JPM",
+  Walmart: "WMT",
+  "Coca-Cola": "KO",
 }
 const currentYear = new Date().getFullYear()
-const years = Array.from({ length: 5 }, (_, i) => currentYear - i)
+const years = Array.from({ length: 10 }, (_, i) => currentYear - i)
 
 type RequestBody = {
   question: string

@@ -9,6 +9,7 @@ logger.setLevel(logging.INFO)
 
 REQUIRED_FIELDS = ["question", "ticker", "year", "period"]
 CORE_FUNCTION_NAME = os.environ["CORE_FUNCTION_NAME"]
+RAG_FUNCTION_NAME = os.environ["RAG_FUNCTION_NAME"]
 
 lambda_client = boto3.client("lambda")
 
@@ -31,6 +32,7 @@ def edge_handler(event, context):
         logger.warning(f"400 BadRequest: could not parse body ({e})")
         return _response(400, {"error": "BadRequest", "message": "Request body must be valid JSON"})
 
+    target_function = CORE_FUNCTION_NAME
 
     missing = [field for field in REQUIRED_FIELDS if field not in payload]
     if missing:
@@ -43,7 +45,7 @@ def edge_handler(event, context):
 
     try:
         response = lambda_client.invoke(
-            FunctionName=CORE_FUNCTION_NAME,
+            FunctionName=target_function,
             InvocationType="RequestResponse",
             Payload=json.dumps(payload).encode(),
         )
