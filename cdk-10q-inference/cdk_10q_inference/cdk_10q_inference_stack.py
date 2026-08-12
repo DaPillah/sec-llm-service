@@ -6,7 +6,7 @@ from aws_cdk import (
 )
 from aws_cdk.aws_lambda_python_alpha import PythonFunction
 from constructs import Construct
-from aws_cdk import aws_ecr_assets as ecr_assets 
+from aws_cdk import aws_ecr_assets as ecr_assets
 
 
 class Cdk10QInferenceStack(Stack):
@@ -31,21 +31,7 @@ class Cdk10QInferenceStack(Stack):
             )
         )
 
-        # --- Edge Lambda: identity, validation, HTTP translation ---
-        edge_lambda = PythonFunction(
-            self, "EdgeFunction",
-            entry="lambda-edge",
-            index="handler.py",
-            handler="edge_handler",
-            runtime=_lambda.Runtime.PYTHON_3_12,
-            timeout=Duration.seconds(29),
-            environment={"CORE_FUNCTION_NAME": inference_lambda.function_name},
-        )
-
-        inference_lambda.grant_invoke(edge_lambda)
-        
-        
-
+        # --- RAG Lambda: chunk, embed, retrieve, generate ---
         rag_lambda = _lambda.DockerImageFunction(
             self, "RagInferenceFunction",
             code=_lambda.DockerImageCode.from_image_asset(
@@ -67,5 +53,20 @@ class Cdk10QInferenceStack(Stack):
                 resources=["*"],
             )
         )
-        
-        
+
+        # --- Edge Lambda: identity, validation, HTTP translation, routing ---
+        edge_lambda = PythonFunction(
+            self, "EdgeFunction",
+            entry="lambda-edge",
+            index="handler.py",
+            handler="edge_handler",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            timeout=Duration.seconds(29),
+            environment={
+                "CORE_FUNCTION_NAME": inference_lambda.function_name,
+                "RAG_FUNCTION_NAME": rag_lambda.function_name,
+            },
+        )
+
+        inference_lambda.grant_invoke(edge_lambda)
+        rag_lambda.grant_invoke(edge_lambda)
